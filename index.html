@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Galeria VR - Sala de Exposição Imersiva</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', 'Arial', sans-serif;
+            overflow: hidden;
+            background-color: black;
+        }
+        /* Instruções para o usuário */
+        #info {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10;
+            backdrop-filter: blur(5px);
+            font-family: monospace;
+            border-left: 3px solid #ff6600;
+        }
+        #controls-tip {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.6);
+            color: #ccc;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 10;
+            font-family: monospace;
+            text-align: right;
+        }
+        @media (max-width: 600px) {
+            #info, #controls-tip { font-size: 10px; padding: 6px 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        🖼️ GALERIA VR | Fotos em Alta Resolução
+    </div>
+    <div id="controls-tip">
+        🎮 Meta Quest: Use os controles para olhar ao redor<br>
+        🕹️ Movimente-se com os thumbsticks | 👆 Gaze + Gatilho para interagir?<br>
+        (Ambiente 360° imersivo - basta olhar)
+    </div>
+
+    <!-- Importação do A-Frame (última versão estável) com componentes extras para VR e controles Quest -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- Componente para melhorar interação com controles e movimento smooth -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+    <!-- Componente de look-controls melhorado para Quest -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
+    
+    <!-- Script para gerar URLs de fotos aleatórias (Unsplash Random + Picsum para variedade) -->
+    <script>
+        // Lista de imagens de alta qualidade e temáticas diversas (arte, natureza, arquitetura)
+        // Usaremos Lorem Picsum com IDs variados e também algumas do Unsplash via placeholder
+        // Para garantir variedade e testar, geramos 12 fotos impressionantes.
+        // Algumas são de alta resolução (2048x...)
+        const photoSet = [
+            "https://picsum.photos/id/1015/2048/1536",  // Paisagem montanha
+            "https://picsum.photos/id/104/2048/1536",  // Cachoeira
+            "https://picsum.photos/id/107/2048/1536",  // Grama e flores
+            "https://picsum.photos/id/116/2048/1536",  // Lago e montanha
+            "https://picsum.photos/id/15/2048/1536",   // Folha verde
+            "https://picsum.photos/id/169/2048/1536",  // Pôr do sol
+            "https://picsum.photos/id/20/2048/1536",   // Café e grãos
+            "https://picsum.photos/id/26/2048/1536",   // Veneza
+            "https://picsum.photos/id/29/2048/1536",   // Arquitetura
+            "https://picsum.photos/id/39/2048/1536",   // Cidade noturna
+            "https://picsum.photos/id/42/2048/1536",   // Piano
+            "https://picsum.photos/id/58/2048/1536",   // Estrada montanha
+            "https://picsum.photos/id/66/2048/1536",   // Floresta
+            "https://picsum.photos/id/96/2048/1536",   // Montanha com neve
+            "https://picsum.photos/id/155/2048/1536",  // Cachoeira gelada
+            "https://picsum.photos/id/163/2048/1536",  // Rio e floresta
+            "https://picsum.photos/id/192/2048/1536",  // Estrada de terra
+            "https://picsum.photos/id/210/2048/1536",  // Girafa
+            "https://picsum.photos/id/219/2048/1536",  // Abacaxi
+            "https://picsum.photos/id/227/2048/1536",  // Construção abstrata
+            "https://picsum.photos/id/238/2048/1536",  // Cidade à noite
+            "https://picsum.photos/id/24/2048/1536"    // Ponte
+        ];
+        
+        // Embaralhar aleatoriamente para ter variedade nas paredes
+        function shuffleArray(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+        
+        const randomizedPhotos = shuffleArray([...photoSet]);
+        
+        // Função para pegar fotos para cada parede (total 4 paredes principais, cada uma com 2-3 quadros gigantes)
+        // Vamos definir posições: parede frontal (z negativo), parede traseira (z positivo), parede esquerda (x negativo), parede direita (x positivo)
+        // Cada parede terá 2 quadros grandes lado a lado ou vertical. Mas faremos quadros bem grandes que ocupam a maior parte da parede.
+        // Para uma experiência imersiva, cada parede terá 1 ou 2 quadros gigantes. Vamos optar por 2 quadros por parede (total 8 imagens).
+        // Mas para mais riqueza, colocaremos também quadros no teto? Não, apenas paredes.
+        
+        // Selecionar 8 fotos da lista aleatória
+        const wallPhotos = randomizedPhotos.slice(0, 12); // 12 fotos no total: 3 por parede? melhor 3 por parede (4 paredes) = 12
+        // Distribuir: Frontal (z = -5.5) com 3 quadros: esquerda, centro, direita. Traseira (z = 5.5) com 3. Esquerda (x = -5.5) com 3. Direita (x = 5.5) com 3.
+        
+        // Definição de tamanho dos quadros: largura 3.2, altura 2.4 (gigante)
+        const frameW = 3.2;
+        const frameH = 2.4;
+        const frameDepth = 0.1;
+        // Distância das paredes (centro da sala em 0,0,0)
+        const wallDist = 5.8;
+        
+        // Função para criar quadros dinamicamente via JS e injetar no HTML
+        function buildGallery() {
+            const scene = document.querySelector('a-scene');
+            if (!scene) {
+                setTimeout(buildGallery, 100);
+                return;
+            }
+            
+            // Já existe um grupo? Se sim, evitar duplicação. Mas usaremos para adicionar.
+            // Vamos criar um grupo de entidades manualmente.
+            
+            // 1. Parede FRONTAL (Z negativo) - centro em Z = -wallDist
+            const frontPhotos = wallPhotos.slice(0, 3);
+            const frontXPositions = [-3.2, 0, 3.2];
+            frontPhotos.forEach((src, idx) => {
+                createPictureFrame(src, frontXPositions[idx], 0.8, -wallDist, 0, 0);
+            });
+            
+            // 2. Parede TRASEIRA (Z positivo)
+            const backPhotos = wallPhotos.slice(3, 6);
+            const backXPositions = [-3.2, 0, 3.2];
+            backPhotos.forEach((src, idx) => {
+                createPictureFrame(src, backXPositions[idx], 0.8, wallDist, Math.PI, 0);
+            });
+            
+            // 3. Parede ESQUERDA (X negativo)
+            const leftPhotos = wallPhotos.slice(6, 9);
+            const leftZPositions = [-3.2, 0, 3.2];
+            leftPhotos.forEach((src, idx) => {
+                createPictureFrame(src, -wallDist, 0.8, leftZPositions[idx], Math.PI / 2, 0);
+            });
+            
+            // 4. Parede DIREITA (X positivo)
+            const rightPhotos = wallPhotos.slice(9, 12);
+            const rightZPositions = [-3.2, 0, 3.2];
+            rightPhotos.forEach((src, idx) => {
+                createPictureFrame(src, wallDist, 0.8, rightZPositions[idx], -Math.PI / 2, 0);
+            });
+            
+            // Adicionar um piso com leve reflexo e chão suave
+            const floor = document.createElement('a-plane');
+            floor.setAttribute('position', '0 -0.01 0');
+            floor.setAttribute('rotation', '-90 0 0');
+            floor.setAttribute('width', '14');
+            floor.setAttribute('height', '14');
+            floor.setAttribute('color', '#2c2e3a');
+            floor.setAttribute('material', 'roughness: 0.6; metalness: 0.1; side: double');
+            floor.setAttribute('receive-shadow', 'true');
+            scene.appendChild(floor);
+            
+            // Teto sutil
+            const ceiling = document.createElement('a-plane');
+            ceiling.setAttribute('position', '0 4.2 0');
+            ceiling.setAttribute('rotation', '90 0 0');
+            ceiling.setAttribute('width', '14');
+            ceiling.setAttribute('height', '14');
+            ceiling.setAttribute('color', '#f0f0f0');
+            ceiling.setAttribute('material', 'roughness: 0.8; metalness: 0.05; transparent: true; opacity: 0.3');
+            ceiling.setAttribute('side', 'double');
+            scene.appendChild(ceiling);
+            
+            // Iluminação ambiente e pontos de luz para destacar os quadros
+            const ambientLight = document.createElement('a-light');
+            ambientLight.setAttribute('type', 'ambient');
+            ambientLight.setAttribute('color', '#404060');
+            ambientLight.setAttribute('intensity', '0.5');
+            scene.appendChild(ambientLight);
+            
+            // Luz principal vinda do centro do teto
+            const mainLight = document.createElement('a-light');
+            mainLight.setAttribute('type', 'point');
+            mainLight.setAttribute('position', '0 3.5 0');
+            mainLight.setAttribute('color', '#ffffff');
+            mainLight.setAttribute('intensity', '0.9');
+            mainLight.setAttribute('distance', '12');
+            mainLight.setAttribute('decay', '1');
+            scene.appendChild(mainLight);
+            
+            // Luzes de preenchimento laterais
+            const fillLightLeft = document.createElement('a-light');
+            fillLightLeft.setAttribute('type', 'point');
+            fillLightLeft.setAttribute('position', '-4 2.5 0');
+            fillLightLeft.setAttribute('color', '#ffccaa');
+            fillLightLeft.setAttribute('intensity', '0.6');
+            scene.appendChild(fillLightLeft);
+            
+            const fillLightRight = document.createElement('a-light');
+            fillLightRight.setAttribute('type', 'point');
+            fillLightRight.setAttribute('position', '4 2.5 0');
+            fillLightRight.setAttribute('color', '#aaccff');
+            fillLightRight.setAttribute('intensity', '0.6');
+            scene.appendChild(fillLightRight);
+            
+            // Adicionar um tapete no centro para referência visual
+            const rug = document.createElement('a-cylinder');
+            rug.setAttribute('position', '0 -0.005 0');
+            rug.setAttribute('radius', '2.2');
+            rug.setAttribute('height', '0.02');
+            rug.setAttribute('color', '#5a4a3a');
+            rug.setAttribute('material', 'roughness: 0.4; metalness: 0.1');
+            rug.setAttribute('rotation', '0 0 0');
+            scene.appendChild(rug);
+            
+            // Pequenos detalhes: rodapé nas paredes
+            addBaseboard(scene);
+        }
+        
+        function createPictureFrame(imgUrl, x, y, z, rotY, rotX = 0) {
+            const scene = document.querySelector('a-scene');
+            // Grupo para moldura + foto
+            const group = document.createElement('a-entity');
+            group.setAttribute('position', `${x} ${y} ${z}`);
+            group.setAttribute('rotation', `${rotX} ${rotY * (180/Math.PI)} 0`);
+            
+            // Placa traseira (moldura grossa)
+            const backPlate = document.createElement('a-box');
+            backPlate.setAttribute('width', `${frameW}`);
+            backPlate.setAttribute('height', `${frameH}`);
+            backPlate.setAttribute('depth', `${frameDepth}`);
+            backPlate.setAttribute('color', '#c8b28b');
+            backPlate.setAttribute('material', 'roughness: 0.3; metalness: 0.7; color: #d4af7a');
+            backPlate.setAttribute('position', '0 0 0');
+            group.appendChild(backPlate);
+            
+            // Moldura dourada/preta: uma borda ao redor (usaremos outra caixa maior ou anel)
+            // Efeito de moldura: uma caixa ligeiramente maior com profundidade menor
+            const frameBorder = document.createElement('a-box');
+            frameBorder.setAttribute('width', `${frameW + 0.15}`);
+            frameBorder.setAttribute('height', `${frameH + 0.15}`);
+            frameBorder.setAttribute('depth', '0.05');
+            frameBorder.setAttribute('color', '#2c1a0c');
+            frameBorder.setAttribute('material', 'metalness: 0.85; roughness: 0.2; color: #a67c4a');
+            frameBorder.setAttribute('position', '0 0 0.04');
+            group.appendChild(frameBorder);
+            
+            // A foto propriamente dita (imagem)
+            const picture = document.createElement('a-plane');
+            picture.setAttribute('width', `${frameW - 0.15}`);
+            picture.setAttribute('height', `${frameH - 0.15}`);
+            picture.setAttribute('position', '0 0 0.07');
+            picture.setAttribute('material', `src: url(${imgUrl}); shader: standard; side: double; roughness: 0.2; metalness: 0.05`);
+            picture.setAttribute('color', '#ffffff');
+            group.appendChild(picture);
+            
+            // Adicionar um leve brilho/emissive na moldura interna (opcional)
+            const innerGlow = document.createElement('a-plane');
+            innerGlow.setAttribute('width', `${frameW - 0.2}`);
+            innerGlow.setAttribute('height', `${frameH - 0.2}`);
+            innerGlow.setAttribute('position', '0 0 0.065');
+            innerGlow.setAttribute('material', 'transparent: true; opacity: 0.15; color: #ffdd99');
+            innerGlow.setAttribute('side', 'double');
+            group.appendChild(innerGlow);
+            
+            scene.appendChild(group);
+        }
+        
+        function addBaseboard(scene) {
+            // Pequenos rodapés decorativos nas paredes
+            const baseColor = '#6b4c3b';
+            const positions = [
+                { pos: [-5.8, -0.8, -5.8], rot: 0, w: 11.6, h: 0.2 }, // frontal
+                { pos: [5.8, -0.8, -5.8], rot: 0, w: 11.6, h: 0.2 },
+                { pos: [-5.8, -0.8, 5.8], rot: 0, w: 11.6, h: 0.2 },
+                { pos: [5.8, -0.8, 5.8], rot: 0, w: 11.6, h: 0.2 },
+                { pos: [-5.8, -0.8, 0], rot: 90, w: 11.6, h: 0.2 },
+                { pos: [5.8, -0.8, 0], rot: 90, w: 11.6, h: 0.2 }
+            ];
+            positions.forEach(p => {
+                const base = document.createElement('a-box');
+                base.setAttribute('position', `${p.pos[0]} ${p.pos[1]} ${p.pos[2]}`);
+                if (p.rot === 90) {
+                    base.setAttribute('width', '0.2');
+                    base.setAttribute('height', '0.2');
+                    base.setAttribute('depth', `${p.w}`);
+                } else {
+                    base.setAttribute('width', `${p.w}`);
+                    base.setAttribute('height', '0.2');
+                    base.setAttribute('depth', '0.2');
+                }
+                base.setAttribute('color', baseColor);
+                base.setAttribute('material', 'roughness: 0.5');
+                scene.appendChild(base);
+            });
+        }
+        
+        // Aguardar o carregamento do A-Frame e da cena
+        window.addEventListener('load', () => {
+            // Criar a-scene dinamicamente se necessário, mas já estará no HTML
+            // O elemento scene já existe no corpo, garantimos que os componentes extras estejam registrados
+            setTimeout(() => {
+                buildGallery();
+                // Adicionar sistema de movimento suave para controles do Quest (wasd / thumbsticks)
+                const sceneEl = document.querySelector('a-scene');
+                if (sceneEl && !sceneEl.hasAttribute('movement-controls')) {
+                    // Adiciona movement-controls do aframe-extras para suporte a thumbsticks
+                    const cameraRig = document.querySelector('[camera]')?.parentElement;
+                    if (cameraRig) {
+                        cameraRig.setAttribute('movement-controls', 'speed: 1.2; fly: false; constrainToNavMesh: false; controls: gamepad');
+                    } else {
+                        // Fallback: adiciona ao a-camera diretamente com wrap
+                        const camera = document.querySelector('a-camera');
+                        if (camera) {
+                            camera.setAttribute('movement-controls', 'speed: 1.2; fly: false; controls: gamepad');
+                        }
+                    }
+                }
+                // Ajustar configurações de renderização para melhor performance no Quest 2
+                const renderer = sceneEl?.renderer;
+                if (renderer) {
+                    renderer.setPixelRatio(window.devicePixelRatio);
+                    renderer.shadowMap.enabled = true;
+                    renderer.shadowMap.type = 2; // PCFSoftShadowMap
+                }
+            }, 100);
+        });
+    </script>
+    
+    <!-- Cena A-Frame principal -->
+    <a-scene 
+        background="color: #11121a" 
+        shadow="type: pcfsoft" 
+        physics="gravity: 0; debug: false"
+        vr-mode-ui="enabled: true"
+        device-orientation-permission-ui="enabled: false"
+        loading-screen="dotsColor: white; backgroundColor: black">
+        
+        <!-- Câmera com controles de movimento e look para Quest -->
+        <a-entity id="rig" position="0 0.8 0" movement-controls="speed: 1.4; fly: false; controls: gamepad, keyboard; constrainToNavMesh: false">
+            <a-camera id="camera" position="0 1.6 0" look-controls="pointerLockEnabled: true" wasd-controls="enabled: true" universal-controls="enabled: true">
+                <!-- Cursor simples para interagir (opcional, apenas para olhar) -->
+                <a-cursor id="cursor" color="#ffaa44" material="shader: flat; opacity: 0.6" scale="0.1 0.1 0.1" raycaster="objects: [a-plane]" fuse="false">
+                    <a-animation attribute="scale" begin="click" dur="100" fill="forwards" from="0.1 0.1 0.1" to="0.15 0.15 0.15" direction="alternate" repeat="1"></a-animation>
+                </a-cursor>
+            </a-camera>
+        </a-entity>
+        
+        <!-- Adicionar um piso sutil com grid para referência de movimento (sem colisão) -->
+        <a-grid position="0 -0.02 0" rotation="-90 0 0" width="15" height="15" color="#3a3a4a" opacity="0.3" material="side: double; transparent: true"></a-grid>
+        
+        <!-- Efeito de iluminação ambiente extra -->
+        <a-light type="ambient" intensity="0.45" color="#2c2e3e"></a-light>
+        
+        <!-- Luz direcional para dar destaque às molduras -->
+        <a-light type="directional" intensity="0.8" position="3 5 4" cast-shadow="true" shadow-map-size="1024" shadow-bias="-0.0001"></a-light>
+        <a-light type="directional" intensity="0.5" position="-2 4 -3" color="#ccbbaa"></a-light>
+        
+        <!-- Pequeno efeito de partículas no centro (opcional, para imersão) -->
+        <a-entity position="0 1.2 0">
+            <a-particle-system preset="dust" color="#aaccff" particle-count="80" opacity="0.2" size="0.08" position="0 0 0" velocity-value="0 0.1 0"></a-particle-system>
+        </a-entity>
+        
+        <!-- Som ambiente suave (sem som, apenas visual) -->
+        
+        <!-- Bloqueio de navegação para manter dentro da sala (opcional com physics) mas não necessário -->
+        <a-box position="0 -1 0" width="13" height="0.2" depth="13" color="#222" visible="false" physics="type: static; mass: 0"></a-box>
+    </a-scene>
+    
+    <!-- Script adicional para garantir que os controles do Quest 2 respondam corretamente -->
+    <script>
+        (function() {
+            // Força a ativação dos controles de movimento para gamepad (Meta Quest Touch)
+            // Aguarda componentes carregarem
+            const ensureMovement = () => {
+                const cameraRig = document.querySelector('#rig');
+                if (cameraRig && !cameraRig.components['movement-controls']) {
+                    cameraRig.setAttribute('movement-controls', 'speed: 1.3; fly: false; controls: gamepad, keyboard');
+                    console.log('Movement controls ativado para Quest');
+                }
+                // Melhorar look-controls para suporte a 6DOF
+                const cam = document.querySelector('a-camera');
+                if (cam && cam.components['look-controls']) {
+                    cam.components['look-controls'].pitchObject.rotation.order = 'YXZ';
+                }
+            };
+            setTimeout(ensureMovement, 500);
+            // Detectar entrada VR para ajustes de performance
+            const scene = document.querySelector('a-scene');
+            if (scene) {
+                scene.addEventListener('enter-vr', () => {
+                    console.log('Modo VR ativado - otimizando para Quest 2');
+                    // Reduzir qualidade de sombras para melhor fps
+                    const renderer = scene.renderer;
+                    if (renderer) {
+                        renderer.shadowMap.type = 1; // PCFShadowMap mais leve
+                        renderer.setPixelRatio(1.0);
+                    }
+                });
+                scene.addEventListener('exit-vr', () => {
+                    if (scene.renderer) scene.renderer.setPixelRatio(window.devicePixelRatio);
+                });
+            }
+        })();
+    </script>
+</body>
+</html>
